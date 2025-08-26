@@ -1,4 +1,3 @@
-// src/app/page.tsx
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
@@ -8,7 +7,7 @@ type Message = { id: string; role: Role; content: string };
 
 export default function Page() {
   const [messages, setMessages] = useState<Message[]>([
-    { id: "hi", role: "assistant", content: "Hello! I'm Superlee Agent. Ask me anything. 🚀" },
+    { id: "hi", role: "assistant", content: "Hello! I'm SuperLee AI Agent. Ask me anything about Story Protocol! 🚀" },
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -36,26 +35,35 @@ export default function Page() {
     const userMsg: Message = { id: crypto.randomUUID(), role: "user", content };
     setMessages((m) => [...m, userMsg]);
     setLoading(true);
+    
     try {
-      // Ganti /api/agent bila sudah punya backend LLM
       const res = await fetch("/api/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: [...messages, userMsg] }),
+        // Fix: Send single message, not messages array
+        body: JSON.stringify({ message: content }),
       });
+      
       let reply = "";
       if (res.ok) {
         const data = await res.json().catch(() => ({}));
-        reply = data?.reply ?? "";
+        // Fix: Use 'response' field, not 'reply'
+        reply = data?.response ?? "";
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        reply = `Error: ${errorData.error || 'Failed to get response'}`;
       }
+      
       if (!reply) {
-        reply = "Endpoint /api/agent belum terhubung. Ini jawaban placeholder yang menirukan pertanyaanmu:\n\n> " + content;
+        reply = "I apologize, but I couldn't generate a response. Please try asking again.";
       }
+      
       setMessages((m) => [...m, { id: crypto.randomUUID(), role: "assistant", content: reply }]);
-    } catch {
+    } catch (error) {
+      console.error('Chat error:', error);
       setMessages((m) => [
         ...m,
-        { id: crypto.randomUUID(), role: "assistant", content: "Terjadi error saat menghubungi layanan. Coba lagi." },
+        { id: crypto.randomUUID(), role: "assistant", content: "Sorry, there was an error connecting to the AI agent. Please try again." },
       ]);
     } finally {
       setLoading(false);
@@ -69,7 +77,8 @@ export default function Page() {
     }
   }
 
-  const hero = useMemo(() => "/agent-sprite.png", []);
+  // Use SuperLee image instead of agent-sprite.png
+  const hero = useMemo(() => "/superlee.jpeg", []);
 
   return (
     <section className="relative z-10">
@@ -77,11 +86,12 @@ export default function Page() {
         {/* CHAT CARD */}
         <div className="card bg-ai">
           <header className="flex items-center gap-3 pb-3 border-b" style={{ borderColor: "var(--ai-border)" }}>
-            <div className="relative h-8 w-8 rounded-xl overflow-hidden">
-              <Image src={hero} alt="Agent" fill sizes="32px" className="object-contain pixelated" />
+            <div className="relative h-8 w-8 rounded-xl overflow-hidden border-2 border-purple-400/50">
+              <Image src={hero} alt="SuperLee Agent" fill sizes="32px" className="object-cover pixelated" />
             </div>
             <div>
-              <div className="font-semibold">Superlee Agent</div>
+              <div className="font-semibold">SuperLee AI Agent</div>
+              <div className="text-xs opacity-70">Story Protocol Assistant</div>
             </div>
           </header>
 
@@ -96,15 +106,15 @@ export default function Page() {
           {/* PROMPT BAR */}
           <div className="mt-4">
             <div
-              className="flex items-end gap-2 rounded-2xl border p-2 md:p-3 bg-white/60 dark:bg-white/5"
+              className="flex items-end gap-2 rounded-2xl border p-2 md:p-3 bg-white/60 dark:bg-white/5 backdrop-blur-sm"
               style={{ borderColor: "var(--ai-border)" }}
             >
               <label
                 className="group relative grid place-items-center size-9 md:size-10 rounded-xl border hover:opacity-90 cursor-pointer transition"
                 style={{ borderColor: "var(--ai-border)" }}
-                title="Attach file"
+                title="Attach file (coming soon)"
               >
-                <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" />
+                <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" disabled />
                 <span className="text-lg select-none">📎</span>
               </label>
 
@@ -113,7 +123,7 @@ export default function Page() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={onKeyDown}
-                placeholder="Write your message…"
+                placeholder="Ask about Story Protocol, IP registration, licensing..."
                 className="flex-1 resize-none bg-transparent outline-none leading-6 max-h-[120px] placeholder:opacity-60"
                 rows={1}
               />
@@ -121,7 +131,7 @@ export default function Page() {
               <button
                 onClick={send}
                 disabled={!canSend}
-                className="px-3 md:px-4 py-2 rounded-xl text-sm font-medium shadow-glow transition disabled:opacity-50 disabled:cursor-not-allowed border"
+                className="px-3 md:px-4 py-2 rounded-xl text-sm font-medium shadow-glow transition disabled:opacity-50 disabled:cursor-not-allowed border bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white"
                 style={{ borderColor: "var(--ai-border)" }}
                 title="Send (Ctrl/⌘+Enter)"
               >
@@ -136,10 +146,17 @@ export default function Page() {
           <div className="card bg-ai relative overflow-hidden">
             <div className="absolute inset-0 pointer-events-none hero-vignette" />
             <div className="relative aspect-[4/5] w-full">
-              <Image src={hero} alt="Agent Pixel Hero" fill priority sizes="320px" className="object-contain pixelated animate-float" />
+              <Image 
+                src={hero} 
+                alt="SuperLee AI Agent" 
+                fill 
+                priority 
+                sizes="320px" 
+                className="object-cover pixelated animate-float" 
+              />
             </div>
             <div className="mt-3 text-sm opacity-80">
-              “IP-First Super Agent”—ready to assist with drafting, analysis, and simulation of IP registration.
+              "Story Protocol Expert"—ready to help with IP registration, licensing, royalties, and everything about Story Protocol.
             </div>
           </div>
         </aside>
@@ -155,7 +172,7 @@ function Bubble({ role, text }: { role: Role; text: string }) {
       <div
         className={`max-w-[92%] md:max-w-[75%] whitespace-pre-wrap msg-pre ${
           isUser ? "bg-blue-500 text-white" : "bg-white/70 dark:bg-white/10"
-        } rounded-2xl px-4 py-3 shadow`}
+        } rounded-2xl px-4 py-3 shadow backdrop-blur-sm`}
         style={!isUser ? { border: "1px solid var(--ai-border)" } : {}}
       >
         {text}
@@ -170,7 +187,7 @@ function Typing() {
       <span className="inline-block w-2 h-2 rounded-full bg-current animate-bounce [animation-delay:-0.2s]" />
       <span className="inline-block w-2 h-2 rounded-full bg-current animate-bounce [animation-delay:-0.1s]" />
       <span className="inline-block w-2 h-2 rounded-full bg-current animate-bounce" />
-      <span className="ml-1">Agent is thinking…</span>
+      <span className="ml-1">SuperLee is thinking…</span>
     </div>
   );
 }

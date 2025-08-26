@@ -24,9 +24,8 @@ export async function POST(request: NextRequest) {
       success: true
     });
   } catch (error: any) {
-    console.error("Chat API error:", error);
+    console.error("Agent API error:", error);
     
-    // Return more detailed error information
     return NextResponse.json(
       { 
         error: "Failed to process your question", 
@@ -38,13 +37,10 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Handle GET requests (optional, for health check)
 export async function GET() {
   return NextResponse.json({
-    status: "Story Protocol AI Agent API is running",
+    status: "SuperLee AI Agent API is running",
     timestamp: new Date().toISOString(),
-    endpoints: {
-      POST: "/api/chat - Send a message to the AI agent"
-    }
+    version: "1.0.0"
   });
 }
