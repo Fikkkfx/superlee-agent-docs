@@ -8,7 +8,7 @@ type Message = { id: string; role: Role; content: string };
 
 export default function Page() {
   const [messages, setMessages] = useState<Message[]>([
-    { id: "hi", role: "assistant", content: "Halo! Aku Superlee Agent. Tanyakan apa saja. 🚀" },
+    { id: "hi", role: "assistant", content: "Hello! I'm Superlee Agent. Ask me anything. 🚀" },
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -82,7 +82,6 @@ export default function Page() {
             </div>
             <div>
               <div className="font-semibold">Superlee Agent</div>
-              <div className="text-xs opacity-70">Chat • No Wallet Connect</div>
             </div>
           </header>
 
@@ -114,7 +113,7 @@ export default function Page() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={onKeyDown}
-                placeholder="Tulis pesanmu…"
+                placeholder="Write your message…"
                 className="flex-1 resize-none bg-transparent outline-none leading-6 max-h-[120px] placeholder:opacity-60"
                 rows={1}
               />
@@ -124,15 +123,11 @@ export default function Page() {
                 disabled={!canSend}
                 className="px-3 md:px-4 py-2 rounded-xl text-sm font-medium shadow-glow transition disabled:opacity-50 disabled:cursor-not-allowed border"
                 style={{ borderColor: "var(--ai-border)" }}
-                title="Kirim (Ctrl/⌘+Enter)"
+                title="Send (Ctrl/⌘+Enter)"
               >
                 Send
               </button>
             </div>
-            <p className="text-[11px] opacity-60 mt-2">
-              Tekan <kbd className="px-1 border rounded">Ctrl</kbd>/<kbd className="px-1 border rounded">⌘</kbd>+
-              <kbd className="px-1 border rounded">Enter</kbd> untuk mengirim.
-            </p>
           </div>
         </div>
 
@@ -144,7 +139,7 @@ export default function Page() {
               <Image src={hero} alt="Agent Pixel Hero" fill priority sizes="320px" className="object-contain pixelated animate-float" />
             </div>
             <div className="mt-3 text-sm opacity-80">
-              “IP-First Super Agent”—siap bantu drafting, analisis, dan simulasi register IP.
+              “IP-First Super Agent”—ready to assist with drafting, analysis, and simulation of IP registration.
             </div>
           </div>
         </aside>

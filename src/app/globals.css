@@ -92,3 +92,11 @@ body::-webkit-scrollbar-track {
 
 /* Konten bubble chat: wrap agresif utk hash/addr panjang */
 .msg-pre { white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
+
+/* ====== Custom utilities ====== */
+@layer utilities {
+  /* Glow lembut biru-cyan untuk kartu / tombol */
+  .shadow-glow {
+    box-shadow: 0 0 32px -12px rgba(56, 189, 248, 0.35);
+  }
+}
