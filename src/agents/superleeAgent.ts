@@ -4,20 +4,56 @@ import path from "path";
 import { searchDocs, quickAnswers } from "../data/storyDocs";
 import { isStoryProtocolRelated, cleanPrompt } from "../utils/helpers";
 
+interface ScoredSection {
+  section: string;
+  score: number;
+}
+
 export class StoryProtocolAgent {
   private openai: OpenAI | null = null;
   private knowledgeBase: string = "";
 
   constructor() {
-    // Initialize OpenAI
-    if (process.env.OPENAI_API_KEY) {
-      this.openai = new OpenAI({
-        apiKey: process.env.OPENAI_API_KEY,
-      });
+    // Initialize OpenAI with better error handling
+    const apiKey = process.env.OPENAI_API_KEY;
+    
+    if (apiKey && apiKey.trim()) {
+      try {
+        this.openai = new OpenAI({
+          apiKey: apiKey.trim(),
+        });
+        console.log("✅ OpenAI initialized with key:", apiKey.substring(0, 10) + "...");
+        
+        // Test API key dengan simple call
+        this.testApiKey();
+      } catch (error) {
+        console.error("❌ Failed to initialize OpenAI:", error);
+        this.openai = null;
+      }
+    } else {
+      console.warn("⚠️ OPENAI_API_KEY not found or empty");
     }
 
-    // Load combined.md knowledge base
+    // Load knowledge base
     this.loadKnowledgeBase();
+  }
+
+  // Test API key method
+  private async testApiKey() {
+    if (!this.openai) return;
+    
+    try {
+      const models = await this.openai.models.list();
+      console.log("✅ API key valid, available models:", models.data.length);
+    } catch (error: any) {
+      console.error("❌ API key test failed:", error.message);
+      if (error.code === 'invalid_api_key') {
+        console.error("❌ Invalid API key - please check your OPENAI_API_KEY");
+      }
+      if (error.code === 'insufficient_quota') {
+        console.error("❌ Insufficient quota - please add credits to your OpenAI account");
+      }
+    }
   }
 
   private loadKnowledgeBase() {
@@ -27,8 +63,7 @@ export class StoryProtocolAgent {
         this.knowledgeBase = fs.readFileSync(docsPath, "utf-8");
         console.log("✅ Loaded combined.md knowledge base");
       } else {
-        console.warn("⚠️ combined.md not found, using fallback documentation");
-        // Fallback to structured docs if combined.md doesn't exist
+        console.warn("⚠️ combined.md not found, using structured documentation");
         this.knowledgeBase = this.createFallbackKnowledgeBase();
       }
     } catch (error) {
@@ -38,15 +73,17 @@ export class StoryProtocolAgent {
   }
 
   private createFallbackKnowledgeBase(): string {
-    // Create knowledge base from structured docs as fallback
-    const docs = searchDocs(""); // Get all docs
+    const docs = searchDocs("");
     return docs.map(doc => `# ${doc.title}\n\n${doc.content}\n\n`).join("");
   }
 
   async answerQuestion(question: string): Promise<string> {
     try {
       const cleanedQuestion = cleanPrompt(question);
-      
+      console.log("🤔 Processing question:", cleanedQuestion);
+      console.log("🔑 OpenAI available:", !!this.openai);
+      console.log("📚 Knowledge base length:", this.knowledgeBase.length);
+
       // Check if question is Story Protocol related
       if (!isStoryProtocolRelated(cleanedQuestion)) {
         return this.getOffTopicResponse();
@@ -55,19 +92,31 @@ export class StoryProtocolAgent {
       // Check for quick answers first
       const quickAnswer = this.getQuickAnswer(cleanedQuestion);
       if (quickAnswer) {
+        console.log("⚡ Using quick answer");
         return quickAnswer;
       }
 
-      // Use OpenAI with knowledge base context
-      if (this.openai && this.knowledgeBase) {
-        return await this.getAIResponseWithContext(cleanedQuestion);
+      // Try OpenAI first if available
+      if (this.openai) {
+        console.log("🤖 Attempting OpenAI with knowledge base");
+        try {
+          const aiResponse = await this.getAIResponseWithContext(cleanedQuestion);
+          console.log("✅ OpenAI response successful");
+          return aiResponse;
+        } catch (error: any) {
+          console.error("❌ OpenAI failed, falling back to documentation:", error.message);
+          // Continue to documentation fallback
+        }
+      } else {
+        console.log("⚠️ OpenAI not available, using documentation");
       }
       
       // Fallback to documentation-based response
+      console.log("📚 Using documentation fallback");
       return this.getDocumentationResponse(cleanedQuestion);
       
     } catch (error: any) {
-      console.error("Error in answerQuestion:", error);
+      console.error("❌ Error in answerQuestion:", error);
       return "I apologize, but I encountered an error while processing your question. Please try asking again or rephrase your question.";
     }
   }
@@ -85,111 +134,94 @@ export class StoryProtocolAgent {
   }
 
   private async getAIResponseWithContext(question: string): Promise<string> {
-    try {
-      // Extract relevant context from knowledge base
-      const relevantContext = this.extractRelevantContext(question);
-      
-      const systemPrompt = `You are SuperLee, an expert AI assistant specialized in Story Protocol. You help users understand intellectual property management, licensing, and blockchain technology.
-
-IMPORTANT GUIDELINES:
-- Answer based ONLY on the provided Story Protocol documentation
-- Be helpful, accurate, and conversational
-- If information isn't in the documentation, say so clearly
-- Provide practical examples when possible
-- Keep responses concise but comprehensive
-- Use markdown formatting for better readability
-
-KNOWLEDGE BASE:
-${relevantContext}`;
-
-      const userPrompt = `Question: ${question}
-
-Please provide a helpful and accurate answer based on the Story Protocol documentation provided above.`;
-
-      const response = await this.openai!.chat.completions.create({
-        model: "gpt-4",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt }
-        ],
-        max_tokens: 1500,
-        temperature: 0.3, // Lower temperature for more consistent answers
-        presence_penalty: 0.1,
-        frequency_penalty: 0.1,
-      });
-
-      const aiResponse = response.choices[0].message.content;
-      
-      if (!aiResponse) {
-        throw new Error("Empty response from OpenAI");
-      }
-
-      return aiResponse;
-    } catch (error: any) {
-      console.error("OpenAI API error:", error);
-      
-      // Provide specific error messages
-      if (error.code === 'insufficient_quota') {
-        return "I'm currently experiencing API quota limitations. Let me provide an answer based on my knowledge base:\n\n" + this.getDocumentationResponse(question);
-      }
-      
-      if (error.code === 'invalid_api_key') {
-        return "There's an API configuration issue. Let me provide an answer based on my knowledge base:\n\n" + this.getDocumentationResponse(question);
-      }
-      
-      // Fallback to documentation response
-      return this.getDocumentationResponse(question);
+    // Fix: Add null check for this.openai
+    if (!this.openai) {
+      throw new Error("OpenAI not initialized");
     }
+
+    // Extract relevant context from knowledge base
+    const relevantContext = this.extractRelevantContext(question);
+    
+    const systemPrompt = `You are SuperLee, an expert AI assistant specialized in Story Protocol - the world's IP blockchain. You help users understand intellectual property management, licensing, and blockchain technology.
+
+CRITICAL INSTRUCTIONS:
+- Answer ONLY based on the provided Story Protocol documentation
+- Be accurate, helpful, and conversational
+- If information isn't in the documentation, clearly state that
+- Provide practical examples and code snippets when relevant
+- Use markdown formatting for better readability
+- Keep responses comprehensive but concise
+- Always stay focused on Story Protocol topics
+
+STORY PROTOCOL KNOWLEDGE BASE:
+${relevantContext}
+
+Remember: You are an expert on Story Protocol. Provide accurate, helpful answers based solely on the documentation provided above.`;
+
+    const userPrompt = `User Question: ${question}
+
+Please provide a comprehensive and accurate answer based on the Story Protocol documentation. Include relevant examples, code snippets, or step-by-step instructions when helpful.`;
+
+    console.log("🔄 Calling OpenAI API...");
+    
+    // Fix: Now TypeScript knows this.openai is not null
+    const response = await this.openai.chat.completions.create({
+      model: "gpt-4o", // Using gpt-4o since it's available in your account
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      max_tokens: 2000,
+      temperature: 0.2,
+      presence_penalty: 0.1,
+      frequency_penalty: 0.1,
+    });
+
+    const aiResponse = response.choices[0].message.content;
+    
+    if (!aiResponse) {
+      throw new Error("Empty response from OpenAI");
+    }
+
+    return aiResponse;
   }
 
   private extractRelevantContext(question: string): string {
     const lowerQuestion = question.toLowerCase();
-    const lines = this.knowledgeBase.split('\n');
-    const relevantSections: string[] = [];
-    let currentSection = '';
-    let isRelevant = false;
-    
-    // Keywords to look for
     const keywords = this.extractKeywords(lowerQuestion);
     
-    for (const line of lines) {
-      // Check if this is a header
-      if (line.startsWith('#')) {
-        // Save previous section if it was relevant
-        if (isRelevant && currentSection.trim()) {
-          relevantSections.push(currentSection.trim());
-        }
-        
-        // Start new section
-        currentSection = line + '\n';
-        isRelevant = keywords.some(keyword => 
-          line.toLowerCase().includes(keyword)
-        );
-      } else {
-        currentSection += line + '\n';
-        
-        // Check if current line contains relevant keywords
-        if (!isRelevant) {
-          isRelevant = keywords.some(keyword => 
-            line.toLowerCase().includes(keyword)
-          );
-        }
+    // Split knowledge base into sections
+    const sections = this.knowledgeBase.split(/\n(?=#)/);
+    const relevantSections: ScoredSection[] = [];
+    
+    for (const section of sections) {
+      const sectionLower = section.toLowerCase();
+      
+      // Check if section contains relevant keywords
+      const relevanceScore = keywords.reduce((score, keyword) => {
+        const occurrences = (sectionLower.match(new RegExp(keyword, 'g')) || []).length;
+        return score + occurrences;
+      }, 0);
+      
+      if (relevanceScore > 0) {
+        relevantSections.push({ section, score: relevanceScore });
       }
     }
     
-    // Add last section if relevant
-    if (isRelevant && currentSection.trim()) {
-      relevantSections.push(currentSection.trim());
-    }
+    // Sort by relevance and take top sections
+    const sortedSections = relevantSections
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5)
+      .map(item => item.section);
     
     // If no specific sections found, return first part of knowledge base
-    if (relevantSections.length === 0) {
-      return this.knowledgeBase.substring(0, 4000);
+    if (sortedSections.length === 0) {
+      return this.knowledgeBase.substring(0, 8000);
     }
     
     // Combine relevant sections, but limit total length
-    const combined = relevantSections.join('\n\n');
-    return combined.length > 6000 ? combined.substring(0, 6000) + '\n\n...' : combined;
+    const combined = sortedSections.join('\n\n');
+    return combined.length > 10000 ? combined.substring(0, 10000) + '\n\n...' : combined;
   }
 
   private extractKeywords(question: string): string[] {
@@ -210,17 +242,27 @@ Please provide a helpful and accurate answer based on the Story Protocol documen
       return `I couldn't find specific information about "${question}" in my knowledge base. 
 
 Here are some topics I can help you with:
-• **What is Story Protocol?** - Overview and core concepts
-• **IP Asset Registration** - How to register intellectual property
-• **PIL Terms** - Programmable IP Licensing explained
-• **Royalty System** - How creators earn from derivatives
-• **TypeScript SDK** - Development tools and integration
-• **Smart Contracts** - Technical implementation details
 
-Could you try rephrasing your question or ask about one of these topics?`;
+**🔹 Core Concepts**
+• What is Story Protocol?
+• IP Asset Registration  
+• PIL Terms and Licensing
+• Royalty Distribution System
+
+**🔹 Development**
+• TypeScript SDK Usage
+• Smart Contract Integration
+• API Reference
+
+**🔹 Practical Guides**
+• How to register an IP Asset
+• Setting up licensing terms
+• Managing derivatives and royalties
+
+Could you try rephrasing your question or ask about one of these specific topics?`;
     }
 
-    // Return the most relevant documentation
+    // Return more dynamic responses based on the question
     const topDoc = relevantDocs[0];
     let response = `## ${topDoc.title}\n\n${topDoc.content}`;
 
@@ -242,11 +284,11 @@ Could you try rephrasing your question or ask about one of these topics?`;
   private getOffTopicResponse(): string {
     return `Hi! I'm SuperLee, your Story Protocol AI assistant. I specialize in helping with Story Protocol topics like:
 
-🔹 **IP Asset Registration** - How to register your intellectual property
-🔹 **Licensing & PIL Terms** - Understanding programmable licensing
-🔹 **Royalty Distribution** - How creators earn from derivatives  
-🔹 **SDK Development** - Using the TypeScript SDK
-🔹 **Smart Contracts** - Technical implementation details
+🔹 **IP Asset Registration** - How to register your intellectual property on-chain
+🔹 **Licensing & PIL Terms** - Understanding programmable licensing frameworks  
+🔹 **Royalty Distribution** - How creators earn from derivative works
+🔹 **SDK Development** - Using the TypeScript SDK for integration
+🔹 **Smart Contracts** - Technical implementation and deployment details
 
 What would you like to know about Story Protocol?`;
   }
